@@ -14,6 +14,9 @@ Used tech:
  * LDAPS for AD queries
  * AWS SNS for sending SMS
 
+## Screenshot
+
+><kbd>![Screenshot](screenshot.png)</kbd>
 
 ## Configuration
 
@@ -21,6 +24,8 @@ Server reads configuration from environment variables. Example:
 
 ```
 #!/bin/bash
+source _venv/bin/activate
+
 export LDAP_SERVER="ldaps://dc.mydomain.example"
 export LDAP_BASE="OU=Users,DC=mydomain,DC=example"
 export LDAP_AUTH_GROUP='CN=ACL_SMS_Gateway,OU=ServiceACLs,OU=ACLs,DC=mydomain,DC=example'
@@ -28,17 +33,31 @@ export LDAP_AUTH_DEFAULT_DOMAIN="@mydomain.example"  # appended to username (sAM
 export LDAP_BIND_USER="CN=SMS_gateway,OU=Services,OU=Users,DC=mydomain,DC=example"
 export LDAP_BIND_PASS="<password_here>"
 
-
 export AWS_ACCESS_KEY_ID="<access_key_here>"
 export AWS_SECRET_ACCESS_KEY="<secret_key_here>"
-
 export AWS_REGION="eu-north-1"
 export AWS_SMS_SENDER_ID="SenderName"
 export AWS_SMS_DEFAULT_COUNTRY_CODE="+358"  # used if number starts with 0
 
-export FLASK_ENV=development  # enable debug logs
+#export FLASK_ENV=development  # enable debug logs
 python main.py
 ```
+
+## Installing and running
+
+Install requirements with `pip install -r requirements.txt`, preferably
+in a _venv_.
+
+Running `python main.py`, it starts a HTTP server at 127.0.0.1:5000.
+If any environment variables are missing, it will give an error and exit.
+You'll probably want to create a shell script, similar to the one above.
+
+Authentication happens with _HTTP Basic_, which is __plaintext__ so
+make sure to use a __HTTPS  reverse proxy__ like Nginx in production.
+
+Flask also recommends setting up WSGI (e.g. Gunicorn) for hosting in
+production instead of the built-in server, but this app shouldn't need much
+scalability  by its nature, so I haven't bothered.
 
 ## License
 

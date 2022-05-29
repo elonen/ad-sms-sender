@@ -96,7 +96,7 @@ def main():
             res = jsonify({'error': str(e)})
         return res
 
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    app.run(debug=False, host='127.0.0.1', port=5000)
 
 
 if __name__ == '__main__':
