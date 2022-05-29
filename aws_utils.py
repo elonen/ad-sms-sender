@@ -3,21 +3,29 @@ import os
 
 class AwsCredentials:
     def __init__(self, access_key_id: str, secret_access_key: str, region: str,
-                 sms_sender_id: str, default_country_code: str):
+                 sms_sender_id: str, default_country_code: str,
+                 log):
         self.access_key_id = access_key_id
         self.secret_access_key = secret_access_key
         self.region = region
         self.sms_sender_id = sms_sender_id
         self.sms_default_country_code = default_country_code
+        self.log = log
 
 
-def get_aws_credentials():
+def get_aws_credentials(log):
+    """
+    Get AWS credentials from environment variables.
+    :param log: Logger object
+    :return: AwsCredentials object
+    """
     cred = AwsCredentials(
         os.environ.get('AWS_ACCESS_KEY_ID'),
         os.environ.get('AWS_SECRET_ACCESS_KEY'),
         os.environ.get('AWS_REGION'),
         os.environ.get('AWS_SMS_SENDER_ID'),
-        os.environ.get('AWS_SMS_DEFAULT_COUNTRY_CODE')
+        os.environ.get('AWS_SMS_DEFAULT_COUNTRY_CODE'),
+        log
     )
     missing_envs = []
     if not cred.access_key_id:
@@ -57,8 +65,9 @@ def aws_send_sms(creds: AwsCredentials, phone_number, message):
             PhoneNumber=phone_number, Message=message,
             MessageAttributes=sms_attribs)
         message_id = response['MessageId']
-        print("Published message to %s." % phone_number)
+
+        creds.log.info(f"Published message to {phone_number}, message_id: {message_id}.")
         return message_id
     except ClientError as e:
         err = "AWS SMS error:" + str(e)
-        raise Error(err)
+        raise Exception(err)

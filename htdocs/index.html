@@ -14,8 +14,16 @@
             <h1>Active Directory SMS sender</h1>
             <p>This is an SMS gateway that allows you to send SMS messages to
                 multiple Active Directory users at once.</p>
+
+            {% if login_error_message %}
+                <div class="alert alert-warning" role="alert" id="warning_message">
+                    <strong>Login failed.</strong>
+                    <span id="warning_message_text">{{ login_error_message }}</span>
+                </div>
+            {% endif %}
+
             <p>
-                <a href="/users" class="btn btn-primary">Fetch user list</a>
+                <a href="/users" class="btn btn-primary">Login with your AD credentials</a>
             </p>
         </div>
     </div>

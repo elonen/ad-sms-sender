@@ -1,8 +1,9 @@
 import os, re
 from flask import jsonify, request
+from flask_httpauth import HTTPBasicAuth
 
-from aws_utils import get_aws_credentials, aws_send_sms
-from ldap_utils import list_users_with_phone_num, ldap_fetch_user_mobile, get_ldap_args_from_env
+from aws_utils import *
+from ldap_utils import *
 
 
 def validate_msisdn(msisdn: str, default_country_code: str):
@@ -16,37 +17,66 @@ def validate_msisdn(msisdn: str, default_country_code: str):
 
 
 def main():
-
-    aws_creds, ldap_args = None, None
-    try:
-        ldap_args = get_ldap_args_from_env()
-        aws_creds = get_aws_credentials()
-    except Exception as e:
-        print(str(e))
-        return 1
-
     # Start the flask app
     from flask import Flask, render_template
     template_dir = os.path.abspath('htdocs')
     app = Flask(__name__, template_folder=template_dir)
+    auth = HTTPBasicAuth()
+
+    aws_creds, ldap_args = None, None
+    try:
+        ldap_args = get_ldap_args_from_env(app.logger)
+        aws_creds = get_aws_credentials(app.logger)
+    except Exception as e:
+        print(str(e))
+        return 1
+
+    # Authentication and Authorization against AD/LDAP users
+
+    @auth.verify_password
+    def verify_password(username, password):
+        if test_ldap_user_password(ldap_args, username, password):
+            return username
+
+    @auth.get_user_roles
+    def get_user_roles(username):
+        if ldap_test_user_group_membership(ldap_args, username, ldap_args.auth_group_dn):
+            return ['authorized']
+        return []
+
+    @auth.error_handler
+    def auth_error(status):
+        err = f"Status {status}: Incorrect username/password or missing privileges. "\
+              "Your Active Directory accounts needs to be a member of group "\
+              f"{ldap_args.auth_group_dn}."
+        return render_template('index.html', login_error_message=err)
+
+
+    # HTTP route handlers
 
     @app.route('/')
     def index():
         return render_template('index.html')
 
     @app.route('/users')
+    @auth.login_required(role='authorized')
     def users():
         return render_template('users.html')
 
     @app.route('/users_json')
+    @auth.login_required(role='authorized')
     def users_json():
         try:
-            res = jsonify(list_users_with_phone_num(ldap_args))
+            ul = list_users_with_phone_num(ldap_args)
+            ul.sort(key=lambda x: x['user'])
+            res = jsonify(ul)
         except Exception as e:
             res = jsonify({'error': str(e)})
+            app.logger.error(e, exc_info=True)
         return res
 
     @app.route('/send_sms', methods=['POST'])
+    @auth.login_required(role='authorized')
     def send_sms():
         try:
             data = request.get_json(force=True)
@@ -66,7 +96,7 @@ def main():
             res = jsonify({'error': str(e)})
         return res
 
-    app.run(debug=True)
+    app.run(debug=True, host='127.0.0.1', port=5000)
 
 
 if __name__ == '__main__':

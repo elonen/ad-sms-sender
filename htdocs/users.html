@@ -12,6 +12,9 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12">
+            <!-- bootstrap logout button that calls logout() js function -->
+            <a href="javascript:logout();" class="btn btn-outline-info" style="float: right">Logout</a>
+
             <h1>Select SMS recipients</h1>
             <p>Select users who you want to send an SMS to.<br/>
                 <em>This lists users who have 'Mobile' field set in Active Directory, under 'Telephones'</em>
@@ -21,6 +24,27 @@
 </div>
 
 <script>
+    function logout() {
+        jQuery.ajax({
+                type: "GET",
+                url: "#",
+                async: false,
+                username: "logmeout",
+                password: "123456",
+                headers: { "Authorization": "Basic xxx" }
+        })
+        .done(function(){
+            // If we don't get an error, we actually got an error as we expect an 401!
+        })
+        .fail(function(){
+            // We expect to get an 401 Unauthorized error! In this case we are successfully
+                // logged out and we redirect the user.
+            window.location = "/";
+        });
+
+        return false;
+    }
+
     function toggleAll() {
         var checkboxes = $('.checkbox');
         checkboxes.prop('checked', !checkboxes.prop('checked'));
