@@ -1,15 +1,17 @@
 import os
 import time
 import ldap, ldap.filter
+from cachetools import cached, TTLCache
 
 
 class LdapSettings:
-    def __init__(self, server, base, bind_user, bind_password, auth_group_dn, default_domain, log):
+    def __init__(self, server, base, bind_user, bind_password, auth_sender_group_dn, auth_viewer_group_dn, default_domain, log):
         self.server = server
         self.base = base
         self.bind_user = bind_user
         self.bind_password = bind_password
-        self.auth_group_dn = auth_group_dn
+        self.auth_sender_group_dn = auth_sender_group_dn
+        self.auth_viewer_group_dn = auth_viewer_group_dn
         self.default_domain = default_domain
         self.log = log
 
@@ -24,7 +26,8 @@ def get_ldap_args_from_env(log):
     base = os.environ.get('LDAP_BASE')
     bind_user = os.environ.get('LDAP_BIND_USER')
     bind_password = os.environ.get('LDAP_BIND_PASS')
-    auth_group_dn = os.environ.get('LDAP_AUTH_GROUP')
+    auth_sender_group_dn = os.environ.get('LDAP_AUTH_SENDER_GROUP')
+    auth_viewer_group_dn = os.environ.get('LDAP_AUTH_VIEWER_GROUP')
     default_domain = os.environ.get('LDAP_AUTH_DEFAULT_DOMAIN')
 
     if None in [server, base, bind_user, bind_password]:
@@ -37,8 +40,10 @@ def get_ldap_args_from_env(log):
             missing_envs.append('LDAP_BIND_USER')
         if not bind_password:
             missing_envs.append('LDAP_BIND_PASS')
-        if not auth_group_dn:
-            missing_envs.append('LDAP_AUTH_GROUP')
+        if not auth_sender_group_dn:
+            missing_envs.append('LDAP_AUTH_SENDER_GROUP')
+        if not auth_viewer_group_dn:
+            missing_envs.append('LDAP_AUTH_VIEWER_GROUP')
         if not default_domain:
             missing_envs.append('LDAP_AUTH_DEFAULT_DOMAIN')
 
@@ -46,7 +51,8 @@ def get_ldap_args_from_env(log):
         raise Exception(err)
 
     return LdapSettings(server, base, bind_user, bind_password,
-                        auth_group_dn, default_domain, log)
+                        auth_sender_group_dn, auth_viewer_group_dn,
+                        default_domain, log)
 
 
 def test_ldap_user_password(ldap_args: LdapSettings, user_account: str, password: str):
@@ -78,26 +84,13 @@ def test_ldap_user_password(ldap_args: LdapSettings, user_account: str, password
         l.unbind()
 
 
-last_ldap_query_time = 0
-last_ldap_query_result = None
-ldap_cache_ttl = 15
-
-
+@cached(cache=TTLCache(maxsize=1024, ttl=15))
 def list_users_with_phone_num(ldap_args: LdapSettings):
     """
     Returns a list of users with a mobile number set in their AD account.
     :param ldap_args: LdapSettings object
     :return: list of users with mobile numbers and their GUIDs
     """
-    # Return cached result if it's not too old
-    global last_ldap_query_time
-    global last_ldap_query_result
-    if time.time() - last_ldap_query_time < ldap_cache_ttl:
-        ldap_args.log.info('Using cached LDAP query result, from timestamp {}'.format(last_ldap_query_time))
-        return last_ldap_query_result
-    else:
-        ldap_args.log.info('No fresh cached LDAP. Doing query.')
-
     # Connect
     l = ldap.initialize(ldap_args.server)
     l.protocol_version = ldap.VERSION3
@@ -121,17 +114,11 @@ def list_users_with_phone_num(ldap_args: LdapSettings):
     l.unbind_s()  # Clean up
 
     # Format result
-    res = [{
+    return [{
         'user': x[0][1]['sAMAccountName'][0].decode('utf-8'),
         'mobile': x[0][1]['mobile'][0].decode('utf-8'),
         'guid': x[0][1]['objectGUID'][0].hex()
     } for x in result_set]
-
-    # Update cache
-    last_ldap_query_time = time.time()
-    last_ldap_query_result = res
-
-    return res
 
 
 def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str):

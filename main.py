@@ -1,10 +1,11 @@
-import os, re
+import re
 from flask import jsonify, request
 from flask_httpauth import HTTPBasicAuth
 
 from aws_utils import *
 from ldap_utils import *
 
+from cachetools import cached, TTLCache
 
 def validate_msisdn(msisdn: str, default_country_code: str):
     msisdn = re.sub(r'\s+', '', msisdn) # Remove whitespaces
@@ -34,21 +35,28 @@ def main():
     # Authentication and Authorization against AD/LDAP users
 
     @auth.verify_password
+    @cached(cache=TTLCache(maxsize=1024, ttl=30))
     def verify_password(username, password):
         if test_ldap_user_password(ldap_args, username, password):
             return username
 
     @auth.get_user_roles
+    @cached(cache=TTLCache(maxsize=1024, ttl=30))
     def get_user_roles(username):
-        if ldap_test_user_group_membership(ldap_args, username, ldap_args.auth_group_dn):
-            return ['authorized']
-        return []
+        roles = []
+        if ldap_test_user_group_membership(ldap_args, username, ldap_args.auth_sender_group_dn):
+            roles = ['sender', 'viewer']
+        elif ldap_test_user_group_membership(ldap_args, username, ldap_args.auth_viewer_group_dn):
+            roles = ['viewer']
+        print(roles)
+        return roles
 
     @auth.error_handler
     def auth_error(status):
         err = f"Status {status}: Incorrect username/password or missing privileges. "\
-              "Your Active Directory accounts needs to be a member of group "\
-              f"{ldap_args.auth_group_dn}."
+              "Your Active Directory accounts needs to be a member of group<br/> "\
+              f"<code>{ldap_args.auth_viewer_group_dn}</code> to view phonebook, and<br/>" \
+              f"<code>{ldap_args.auth_sender_group_dn}</code> to send SMS."
         return render_template('index.html', login_error_message=err)
 
 
@@ -59,12 +67,12 @@ def main():
         return render_template('index.html')
 
     @app.route('/users')
-    @auth.login_required(role='authorized')
+    @auth.login_required(role=['sender', 'viewer'])
     def users():
-        return render_template('users.html')
+        return render_template('users.html', sms_enabled=('sender' in get_user_roles(auth.current_user())))
 
     @app.route('/users_json')
-    @auth.login_required(role='authorized')
+    @auth.login_required(role=['sender', 'viewer'])
     def users_json():
         try:
             ul = list_users_with_phone_num(ldap_args)
@@ -76,7 +84,7 @@ def main():
         return res
 
     @app.route('/send_sms', methods=['POST'])
-    @auth.login_required(role='authorized')
+    @auth.login_required(role=['sender'])
     def send_sms():
         try:
             data = request.get_json(force=True)
