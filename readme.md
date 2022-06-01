@@ -4,7 +4,7 @@ A web based app for sending text message to Active Directory users.
 Features:
 
  * Requires a login with a valid AD account. Authorizes against given group, allowing only members to send messages.
- * Lists users who have "Telephones / Mobile" field set in their AD entry
+ * Lists users who have "Telephones / Mobile" field set in their AD entry. (Optionally everyone, if LDAP_ALSO_LIST_MISSING_NUMBERS is true.)
  * Allows selecting all or some of the listed users as SMS recipients
  * Optionally users (in "viewers" AD group) can also just use it as a phone
 
@@ -32,6 +32,7 @@ export LDAP_BASE="OU=Users,DC=mydomain,DC=example"
 
 export LDAP_AUTH_SENDER_GROUP='CN=ACL_SMS_Gateway,OU=ServiceACLs,OU=ACLs,DC=mydomain,DC=example'   # send SMS
 export LDAP_AUTH_VIEWER_GROUP='CN=ACL_Phonebook,OU=ServiceACLs,OU=ACLs,DC=mydomain,DC=example'  # view numbers only
+export LDAP_ALSO_LIST_MISSING_NUMBERS="false"
 
 export LDAP_AUTH_DEFAULT_DOMAIN="@mydomain.example"  # appended to username (sAMAccount)
 export LDAP_BIND_USER="CN=SMS_gateway,OU=Services,OU=Users,DC=mydomain,DC=example"

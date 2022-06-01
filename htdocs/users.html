@@ -12,7 +12,7 @@
                <h1>Phonebook</h1>
             {% endif %}
 
-            <em>This lists users who have 'Mobile' field set in Active Directory, under 'Telephones'</em>
+            <em>This lists 'Mobile' field in Active Directory entries, under 'Telephones'</em>
         </div>
     </div>
 
@@ -126,6 +126,13 @@
 
         function fetch_user_rows()
         {
+            function conditional_checkbox(user)
+            {
+                if (user.mobile.length > 0)
+                    return '<input type="checkbox" class="checkbox" value="' + user.guid + '" id="checkbox_' + user.guid + '" />';
+                return '';
+            }
+
             $.ajax({
                 url: 'users_json',
                 dataType: 'json',
@@ -140,7 +147,7 @@
                             //console.log(user);
                             $('#userTable').append(
                                 '<tr>' +
-                                '<td><input type="checkbox" class="checkbox" value="' + user.guid + '" id="checkbox_' + user.guid + '" /></td>' +
+                                '<td>' + conditional_checkbox(user) + '</td>' +
                                 '<td>' + user.user + '</td>' +
                                 '<td>' + user.mobile + '</td>' +
                                 '<td id="status_' + user.guid + '"> - </td>' +

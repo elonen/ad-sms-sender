@@ -1,50 +1,45 @@
 import os
+from logging import Logger
 
 
-class AwsCredentials:
-    def __init__(self, access_key_id: str, secret_access_key: str, region: str,
-                 sms_sender_id: str, default_country_code: str,
-                 log):
-        self.access_key_id = access_key_id
-        self.secret_access_key = secret_access_key
-        self.region = region
-        self.sms_sender_id = sms_sender_id
-        self.sms_default_country_code = default_country_code
-        self.log = log
+class AwsSettings:
+    access_key_id: str
+    secret_access_key: str
+    region: str
+    sms_sender_id: str
+    sms_default_country_code: str
+    log: Logger
 
 
-def get_aws_credentials(log):
+def get_aws_credentials(log) -> AwsSettings:
     """
     Get AWS credentials from environment variables.
     :param log: Logger object
-    :return: AwsCredentials object
+    :return: AwsSettings object
     """
-    cred = AwsCredentials(
-        os.environ.get('AWS_ACCESS_KEY_ID'),
-        os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        os.environ.get('AWS_REGION'),
-        os.environ.get('AWS_SMS_SENDER_ID'),
-        os.environ.get('AWS_SMS_DEFAULT_COUNTRY_CODE'),
-        log
-    )
     missing_envs = []
-    if not cred.access_key_id:
-        missing_envs.append('AWS_ACCESS_KEY_ID')
-    if not cred.secret_access_key:
-        missing_envs.append('AWS_SECRET_ACCESS_KEY')
-    if not cred.region:
-        missing_envs.append('AWS_REGION')
-    if not cred.sms_sender_id:
-        missing_envs.append('AWS_SMS_SENDER_ID')
-    if not cred.sms_default_country_code:
-        missing_envs.append('AWS_SMS_DEFAULT_COUNTRY_CODE')
+
+    def env(name: str) -> str:
+        nonlocal missing_envs
+        v = os.environ.get(name)
+        if not v:
+            missing_envs.append(name)
+        return v
+
+    conf = AwsSettings()
+    conf.access_key_id = env('AWS_ACCESS_KEY_ID')
+    conf.secret_access_key = env('AWS_SECRET_ACCESS_KEY')
+    conf.region = env('AWS_REGION')
+    conf.sms_sender_id = env('AWS_SMS_SENDER_ID')
+    conf.sms_default_country_code = env('AWS_SMS_DEFAULT_COUNTRY_CODE')
+    conf.log = log
+
     if missing_envs:
-        err = 'Missing environment variables: {}'.format(', '.join(missing_envs))
-        raise Exception(err)
-    return cred
+        raise Exception('Missing environment variables: {}'.format(', '.join(missing_envs)))
+    return conf
 
 
-def aws_send_sms(creds: AwsCredentials, phone_number, message):
+def aws_send_sms(creds: AwsSettings, phone_number: str, message: str) -> str:
     """
     Send an SMS to a phone number.
     :return: ID of the message.

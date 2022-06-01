@@ -1,4 +1,4 @@
-import re
+import re, sys
 from flask import jsonify, request
 from flask_httpauth import HTTPBasicAuth
 
@@ -24,12 +24,12 @@ def main():
     app = Flask(__name__, template_folder=template_dir)
     auth = HTTPBasicAuth()
 
-    aws_creds, ldap_args = None, None
+    aws_conf, ldap_args = None, None
     try:
         ldap_args = get_ldap_args_from_env(app.logger)
-        aws_creds = get_aws_credentials(app.logger)
+        aws_conf = get_aws_credentials(app.logger)
     except Exception as e:
-        print(str(e))
+        print(str(e), file=sys.stderr)
         return 1
 
     # Authentication and Authorization against AD/LDAP users
@@ -48,7 +48,6 @@ def main():
             roles = ['sender', 'viewer']
         elif ldap_test_user_group_membership(ldap_args, username, ldap_args.auth_viewer_group_dn):
             roles = ['viewer']
-        print(roles)
         return roles
 
     @auth.error_handler
@@ -96,8 +95,8 @@ def main():
 
             # Fetch user's mobile phone from LDAP based on objectGUID
             mobile = ldap_fetch_user_mobile(ldap_args, user_guid=data['guid'])
-            mobile = validate_msisdn(mobile, aws_creds.sms_default_country_code)
-            aws_send_sms(aws_creds, mobile, data['message'])
+            mobile = validate_msisdn(mobile, aws_conf.sms_default_country_code)
+            aws_send_sms(aws_conf, mobile, data['message'])
 
             res = jsonify({'success': True})
         except Exception as e:

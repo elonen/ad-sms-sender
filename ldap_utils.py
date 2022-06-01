@@ -1,61 +1,56 @@
 import os
-import time
+from typing import List, Dict
+
 import ldap, ldap.filter
 from cachetools import cached, TTLCache
+from logging import Logger
 
 
 class LdapSettings:
-    def __init__(self, server, base, bind_user, bind_password, auth_sender_group_dn, auth_viewer_group_dn, default_domain, log):
-        self.server = server
-        self.base = base
-        self.bind_user = bind_user
-        self.bind_password = bind_password
-        self.auth_sender_group_dn = auth_sender_group_dn
-        self.auth_viewer_group_dn = auth_viewer_group_dn
-        self.default_domain = default_domain
-        self.log = log
+    server: str
+    base: str
+    bind_user: str
+    bind_password: str
+    auth_sender_group_dn: str
+    auth_viewer_group_dn: str
+    default_domain: str
+    also_list_missing_numbers: bool
+    log: Logger
 
 
-def get_ldap_args_from_env(log):
+def get_ldap_args_from_env(log) -> LdapSettings:
     """
     Get LDAP settings from environment variables.
     :param log: Logger object
     :return: LdapSettings object
     """
-    server = os.environ.get('LDAP_SERVER')
-    base = os.environ.get('LDAP_BASE')
-    bind_user = os.environ.get('LDAP_BIND_USER')
-    bind_password = os.environ.get('LDAP_BIND_PASS')
-    auth_sender_group_dn = os.environ.get('LDAP_AUTH_SENDER_GROUP')
-    auth_viewer_group_dn = os.environ.get('LDAP_AUTH_VIEWER_GROUP')
-    default_domain = os.environ.get('LDAP_AUTH_DEFAULT_DOMAIN')
+    missing_envs = []
 
-    if None in [server, base, bind_user, bind_password]:
-        missing_envs = []
-        if not server:
-            missing_envs.append('LDAP_SERVER')
-        if not base:
-            missing_envs.append('LDAP_BASE')
-        if not bind_user:
-            missing_envs.append('LDAP_BIND_USER')
-        if not bind_password:
-            missing_envs.append('LDAP_BIND_PASS')
-        if not auth_sender_group_dn:
-            missing_envs.append('LDAP_AUTH_SENDER_GROUP')
-        if not auth_viewer_group_dn:
-            missing_envs.append('LDAP_AUTH_VIEWER_GROUP')
-        if not default_domain:
-            missing_envs.append('LDAP_AUTH_DEFAULT_DOMAIN')
+    def env(name: str) -> str:
+        nonlocal missing_envs
+        v = os.environ.get(name)
+        if not v:
+            missing_envs.append(name)
+        return v or ''
 
-        err = 'Missing environment variables: {}'.format(', '.join(missing_envs))
-        raise Exception(err)
+    conf = LdapSettings()
+    conf.server = env('LDAP_SERVER')
+    conf.base = env('LDAP_BASE')
+    conf.bind_user = env('LDAP_BIND_USER')
+    conf.bind_password = env('LDAP_BIND_PASS')
+    conf.auth_sender_group_dn = env('LDAP_AUTH_SENDER_GROUP')
+    conf.auth_viewer_group_dn = env('LDAP_AUTH_VIEWER_GROUP')
+    conf.default_domain = env('LDAP_AUTH_DEFAULT_DOMAIN')
+    conf.also_list_missing_numbers = (env('LDAP_ALSO_LIST_MISSING_NUMBERS') .strip().lower() == 'true')
+    conf.log = log
 
-    return LdapSettings(server, base, bind_user, bind_password,
-                        auth_sender_group_dn, auth_viewer_group_dn,
-                        default_domain, log)
+    if missing_envs:
+        raise Exception('Missing environment variables: ' + ', '.join(missing_envs))
+
+    return conf
 
 
-def test_ldap_user_password(ldap_args: LdapSettings, user_account: str, password: str):
+def test_ldap_user_password(ldap_args: LdapSettings, user_account: str, password: str) -> bool:
     """
     Test if a user can authenticate with a given password.
     This will append domain to the username if it's missing.
@@ -85,19 +80,23 @@ def test_ldap_user_password(ldap_args: LdapSettings, user_account: str, password
 
 
 @cached(cache=TTLCache(maxsize=1024, ttl=15))
-def list_users_with_phone_num(ldap_args: LdapSettings):
+def list_users_with_phone_num(ldap_args: LdapSettings) -> List[Dict]:
     """
     Returns a list of users with a mobile number set in their AD account.
+    If LDAP_ALSO_LIST_MISSING_NUMBERS is true, returns everyone, but an
+    empty string for those who have no number.
     :param ldap_args: LdapSettings object
-    :return: list of users with mobile numbers and their GUIDs
+    :return: list of accounts, their GUIDs and mobile numbers
     """
-    # Connect
     l = ldap.initialize(ldap_args.server)
     l.protocol_version = ldap.VERSION3
     l.simple_bind_s(ldap_args.bind_user, ldap_args.bind_password)
 
     # Search for users with a mobile phone number
     ldap_filter = '(&(objectClass=person)(mobile=*))'
+    if ldap_args.also_list_missing_numbers:
+        ldap_filter = '(objectClass=person)'
+
     attrs = ['cn', 'mobile', 'sAMAccountName', 'sn', 'objectGUID']
     ldap_args.log.debug('LDAP searching mobile phone users: ' + ldap_filter)
     ldap_result_id = l.search(ldap_args.base, ldap.SCOPE_SUBTREE, ldap_filter, attrs)
@@ -116,12 +115,12 @@ def list_users_with_phone_num(ldap_args: LdapSettings):
     # Format result
     return [{
         'user': x[0][1]['sAMAccountName'][0].decode('utf-8'),
-        'mobile': x[0][1]['mobile'][0].decode('utf-8'),
+        'mobile': (x[0][1]['mobile'][0].decode('utf-8') if 'mobile' in x[0][1] else ''),
         'guid': x[0][1]['objectGUID'][0].hex()
     } for x in result_set]
 
 
-def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str):
+def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str) -> str:
     """
     Get mobile number of a user with a given GUID.
     :param ldap_args: LdapSettings object
@@ -135,7 +134,7 @@ def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str):
     raise Exception('User not found')
 
 
-def ldap_test_user_group_membership(ldap_args: LdapSettings, user_account: str, group_dn: str):
+def ldap_test_user_group_membership(ldap_args: LdapSettings, user_account: str, group_dn: str) -> bool:
     """
     Test if a user is a member of an AD group (or any of its nested member groups).
     :param ldap_args: LdapSettings object
