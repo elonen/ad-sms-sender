@@ -50,7 +50,7 @@
             $(elem).fadeOut(500).fadeIn(500);
     }
 
-    function send_sms_ajax(guid, message)
+    function send_sms_ajax(guid, message, phone_fields)
     {
         var status = $('#status_' + guid);
         set_status_text(status, 'Sending...', 'brown');
@@ -58,7 +58,7 @@
         $.ajax({
             url: '/send_sms',
             type: 'POST',
-            data: JSON.stringify({guid: guid, message: message}),
+            data: JSON.stringify({guid: guid, message: message, phone_fields: phone_fields}),
             mimetype: 'application/json',
             error: function(xhr, status, error) {
                 var status = $('#status_' + guid);
@@ -99,6 +99,12 @@
             return;
         }
 
+       phone_fields = [];
+         if ($('#pfMobile').prop('checked') || $('#pfBoth').prop('checked'))
+                phone_fields.push('mobile');
+        if ($('#pfHomePhone').prop('checked') || $('#pfBoth').prop('checked'))
+            phone_fields.push('homePhone');
+
         // Get the selected users and send SMS
         var selected_count = 0;
         var checkboxes = $('.checkbox');
@@ -106,7 +112,7 @@
             if ($(this).prop('checked')) {
                 selected_count++;
                 guid = $(this).val();
-                send_sms_ajax(guid, sms_message);
+                send_sms_ajax(guid, sms_message, phone_fields);
             }
         });
 
@@ -150,6 +156,7 @@
                                 '<td>' + conditional_checkbox(user) + '</td>' +
                                 '<td>' + user.user + '</td>' +
                                 '<td>' + user.mobile + '</td>' +
+                                '<td>' + user.homePhone + '</td>' +
                                 '<td id="status_' + user.guid + '"> - </td>' +
                                 '</tr>'
                             );
@@ -179,7 +186,8 @@
                         <input type="checkbox" onclick="toggleAll(this)">
                     </th>
                     <th>Name</th>
-                    <th>Phone</th>
+                    <th>Mobile</th>
+                    <th>HomePhone</th>
                     <th>Status</th>
                 </tr>
                 </thead>
@@ -199,8 +207,25 @@
                 <div class="row">
                     <div class="col-md-12">
                         <form id="send_message_form">
+                        <div class="form-group">
                             <div class="form-group">
-                                <label for="message">Message</label>
+                                <label for="phonefields">Send SMS to:</label>
+                                <div id="phonefields">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" id="pfMobile" name="phone" value="mobile">
+                                        <label class="form-check-label" for="mobile">Mobile</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" id="pfHomePhone" name="phone" value="homePhone">
+                                        <label class="form-check-label" for="homePhone">HomePhone</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" id="pfBoth" name="phone" value="both" checked>
+                                        <label class="form-check-label" for="both">Both</label>
+                                    </div>
+                                </div>
+                            </div>                            <div class="form-group">
+                                <label for="message">Message:</label>
                                 <textarea class="form-control" id="message" rows="3"></textarea>
                             </div>
                             <script>

@@ -5,7 +5,6 @@ import ldap, ldap.filter
 from cachetools import cached, TTLCache
 from logging import Logger
 
-
 class LdapSettings:
     server: str
     base: str
@@ -97,7 +96,7 @@ def list_users_with_phone_num(ldap_args: LdapSettings) -> List[Dict]:
     if ldap_args.also_list_missing_numbers:
         ldap_filter = '(objectClass=person)'
 
-    attrs = ['cn', 'mobile', 'sAMAccountName', 'sn', 'objectGUID']
+    attrs = ['cn', 'mobile', 'homePhone', 'sAMAccountName', 'sn', 'objectGUID']
     ldap_args.log.debug('LDAP searching mobile phone users: ' + ldap_filter)
     ldap_result_id = l.search(ldap_args.base, ldap.SCOPE_SUBTREE, ldap_filter, attrs)
     result_set = []
@@ -116,21 +115,23 @@ def list_users_with_phone_num(ldap_args: LdapSettings) -> List[Dict]:
     return [{
         'user': x[0][1]['sAMAccountName'][0].decode('utf-8'),
         'mobile': (x[0][1]['mobile'][0].decode('utf-8') if 'mobile' in x[0][1] else ''),
+        'homePhone': (x[0][1]['homePhone'][0].decode('utf-8') if 'homePhone' in x[0][1] else ''),
         'guid': x[0][1]['objectGUID'][0].hex()
     } for x in result_set]
 
 
-def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str) -> str:
+def ldap_fetch_user_mobile(ldap_args: LdapSettings, user_guid: str, attr='mobile') -> str:
     """
     Get mobile number of a user with a given GUID.
     :param ldap_args: LdapSettings object
     :param user_guid: GUID of the user
+    :param attr: Attribute to fetch (default: mobile), e.g. 'homePhone'
     :return: Mobile number of the user
     """
     all_users = list_users_with_phone_num(ldap_args)  # Note: underlying function caches the result
     for user in all_users:
         if user['guid'] == user_guid:
-            return user['mobile']
+            return user.get(attr, '')
     raise Exception('User not found')
 
 

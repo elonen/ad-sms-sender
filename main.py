@@ -93,10 +93,16 @@ def main():
                 raise Exception('Missing parameters')
             data['message'] = data['message'][:160]
 
+            for p in data['phone_fields']:
+                assert p in ['mobile', 'homePhone'], 'Invalid phone field'
+
             # Fetch user's mobile phone from LDAP based on objectGUID
-            mobile = ldap_fetch_user_mobile(ldap_args, user_guid=data['guid'])
-            mobile = validate_msisdn(mobile, aws_conf.sms_default_country_code)
-            aws_send_sms(aws_conf, mobile, data['message'])
+            for fld in data['phone_fields']:
+                mobile = ldap_fetch_user_mobile(ldap_args, user_guid=data['guid'], attr=fld)
+                if mobile:
+                    mobile = validate_msisdn(mobile, aws_conf.sms_default_country_code)
+                    print(f"Sending SMS to {mobile} with message: {data['message']}")
+                    aws_send_sms(aws_conf, mobile, data['message'])
 
             res = jsonify({'success': True})
         except Exception as e:
