@@ -14,6 +14,8 @@ class LdapSettings:
     auth_viewer_group_dn: str
     default_domain: str
     also_list_missing_numbers: bool
+    gui_label_mobile: str
+    gui_label_home_phone: str
     log: Logger
 
 
@@ -25,10 +27,12 @@ def get_ldap_args_from_env(log) -> LdapSettings:
     """
     missing_envs = []
 
-    def env(name: str) -> str:
+    def env(name: str, default=None) -> str:
         nonlocal missing_envs
         v = os.environ.get(name)
         if not v:
+            if default is not None:
+                return default
             missing_envs.append(name)
         return v or ''
 
@@ -40,7 +44,9 @@ def get_ldap_args_from_env(log) -> LdapSettings:
     conf.auth_sender_group_dn = env('LDAP_AUTH_SENDER_GROUP')
     conf.auth_viewer_group_dn = env('LDAP_AUTH_VIEWER_GROUP')
     conf.default_domain = env('LDAP_AUTH_DEFAULT_DOMAIN')
-    conf.also_list_missing_numbers = (env('LDAP_ALSO_LIST_MISSING_NUMBERS') .strip().lower() == 'true')
+    conf.also_list_missing_numbers = (env('LDAP_ALSO_LIST_MISSING_NUMBERS', 'true') .strip().lower() == 'true')
+    conf.gui_label_mobile = env('LDAP_GUI_LABEL_MOBILE', 'Mobile')
+    conf.gui_label_home_phone = env('LDAP_GUI_LABEL_HOME_PHONE', 'HomePhone')
     conf.log = log
 
     if missing_envs:

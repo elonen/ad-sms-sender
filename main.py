@@ -68,7 +68,12 @@ def main():
     @app.route('/users')
     @auth.login_required(role=['sender', 'viewer'])
     def users():
-        return render_template('users.html', sms_enabled=('sender' in get_user_roles(auth.current_user())))
+        return render_template(
+            'users.html',
+            sms_enabled=('sender' in get_user_roles(auth.current_user())),
+            gui_mobile_field_name=ldap_args.gui_label_mobile,
+            gui_home_phone_field_name=ldap_args.gui_label_home_phone
+        )
 
     @app.route('/users_json')
     @auth.login_required(role=['sender', 'viewer'])
@@ -81,6 +86,7 @@ def main():
             res = jsonify({'error': str(e)})
             app.logger.error(e, exc_info=True)
         return res
+
 
     @app.route('/send_sms', methods=['POST'])
     @auth.login_required(role=['sender'])
@@ -97,19 +103,61 @@ def main():
                 assert p in ['mobile', 'homePhone'], 'Invalid phone field'
 
             # Fetch user's mobile phone from LDAP based on objectGUID
+            msg_id = None
             for fld in data['phone_fields']:
                 mobile = ldap_fetch_user_mobile(ldap_args, user_guid=data['guid'], attr=fld)
                 if mobile:
                     mobile = validate_msisdn(mobile, aws_conf.sms_default_country_code)
-                    print(f"Sending SMS to {mobile} with message: {data['message']}")
-                    aws_send_sms(aws_conf, mobile, data['message'])
+                    app.logger.info(f"Sending SMS to {mobile}...")
+                    msg_id = aws_send_sms(aws_conf, mobile, data['message'])
 
-            res = jsonify({'success': True})
+            if msg_id is None:
+                raise Exception('No phone number found')
+
+            res = jsonify({'success': True, 'message_id': msg_id})
+
         except Exception as e:
             res = jsonify({'error': str(e)})
         return res
 
-    app.run(debug=False, host='127.0.0.1', port=5000)
+
+    @app.route('/latest_report_ts', methods=['GET'])
+    @auth.login_required(role=['sender'])
+    def latest_report_ts():
+        try:
+            ts = get_sms_latest_delivery_timestamp(aws_conf)
+            if ts is not None:
+                return jsonify({'timestamp': ts})
+            else:
+                return ('Delivery reporting log group not configured.', 404)
+        except Exception as e:
+            res = jsonify({'error': str(e)})
+            return (res, 500)
+
+
+    @app.route('/delivery_status', methods=['POST'])
+    @auth.login_required(role=['sender'])
+    def delivery_status():
+        try:
+            data = request.get_json(force=True)
+            if 'message_ids' not in data or not data['message_ids']:
+                raise Exception('Missing parameters')
+            start_ts = 0
+            if 'start_ts' in data and data['start_ts']:
+                start_ts = int(data['start_ts'])
+
+            dres = get_sms_check_delivery_status(aws_conf, data['message_ids'], start_ts)
+            if dres is not None:
+                return jsonify(dres)
+            else:
+                return ('Delivery reporting not available.', 404)
+
+        except Exception as e:
+            res = jsonify({'error': str(e)})
+            return (res, 500)
+
+
+    app.run(host='127.0.0.1', port=5000)
 
 
 if __name__ == '__main__':

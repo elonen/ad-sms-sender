@@ -12,7 +12,7 @@
                <h1>Phonebook</h1>
             {% endif %}
 
-            <em>This lists 'Mobile' field in Active Directory entries, under 'Telephones'</em>
+            <em>This lists 'Mobile' and 'homePhone' fields in Active Directory entries, under 'Telephones'</em>
         </div>
     </div>
 
@@ -42,13 +42,99 @@
         checkboxes.prop('checked', !checkboxes.prop('checked'));
     }
 
+    function scroll_to_element(elem_id)
+    {
+        $('html, body').animate({
+            scrollTop: $(elem_id).offset().top
+        }, 500);
+    }
+
     function set_status_text(elem, text, color, do_blink=true)
     {
         $(elem).text(text);
         $(elem).css('color', color);
+        scroll_to_element(elem);
         if (do_blink)
             $(elem).fadeOut(500).fadeIn(500);
     }
+
+    // --------------------------------------------------------------------------------------------
+    // Delivery status checker (background polling)
+    // --------------------------------------------------------------------------------------------
+    let waiting_for_delivery = [];
+    let msg_id_to_user_guid = {};
+    let latest_report_ts = null;
+    let reporting_available = true;
+    const reporting_interval = 3000;
+
+    function check_delivery_status()
+    {
+        //console.log('check_delivery_status()...');
+
+        // If we don't have the latest report timestamp, fetch it first
+        if (latest_report_ts === null && reporting_available) {
+            $.ajax({
+                url: '/latest_report_ts',
+                type: 'GET',
+                error: function(xhr, status, error) {
+                    console.log('/latest_report_ts: HTTP error (' + xhr.status + '): ' + xhr.responseText);
+                    if (xhr.status != 404)
+                        set_status_text($('#query_status'), 'Error while fetching latest report timestamp: ' + xhr.responseText, 'red');
+                    else
+                        set_status_text($('#query_status'), 'Note: Delivery reporting not available.', 'orange');
+                    reporting_available = false;
+                },
+                success: function(data) {
+                    latest_report_ts = data.timestamp;
+                    console.log('Fetched latest delivery report timestamp: ' + latest_report_ts);
+                }
+            });
+        }
+
+        // Check the delivery status of the pending messages
+        if (!reporting_available)
+        {
+            // If we don't have delivery reporting, we can't know the status of the messages.
+            $.each(waiting_for_delivery, function(index, message_id) {
+                var status_elem = $('#status_' + msg_id_to_user_guid[message_id]);
+                set_status_text(status_elem, 'Submitted (delivery unknown)', 'orange');
+            });
+            waiting_for_delivery = [];
+        }
+        else if (waiting_for_delivery.length > 0) {
+            console.log('Checking delivery status of ' + waiting_for_delivery.length + ' messages...');
+            $.ajax({
+                url: '/delivery_status',
+                type: 'POST',
+                data: JSON.stringify({message_ids: waiting_for_delivery, start_ts: latest_report_ts}),
+                mimetype: 'application/json',
+                error: function(xhr, status, error) {
+                    console.log('/delivery_status: HTTP error (' + status + '): ' + error);
+                    $('#query_status').html('<td colspan="4" style="color: red"><em>Error while checking delivery status: ' + error + '</em></td>');
+                    reporting_available = false;
+                },
+                success: function(data) {
+                    $.each(data, function(message_id, status) {
+                        // Update the status text for the user
+                        var status_elem = $('#status_' + msg_id_to_user_guid[message_id]);
+                        if (status.delivered)
+                            set_status_text(status_elem, 'SENT: ' + status.reason, 'green');
+                        else
+                            set_status_text(status_elem, 'Failed: ' + status.reason, 'red');
+
+                        // Remove msg from the pending list
+                        waiting_for_delivery = waiting_for_delivery.filter(value => value !== message_id);
+                    });
+                }
+            });
+        }
+
+        // Schedule the next check
+        setTimeout(check_delivery_status, reporting_interval);
+    }
+    check_delivery_status();    // Start the delivery status checking loop
+
+    // --------------------------------------------------------------------------------------------
 
     function send_sms_ajax(guid, message, phone_fields)
     {
@@ -69,19 +155,16 @@
                 if (data.error)
                     set_status_text(status, 'Error: ' + data.error, 'red');
                 else {
-                    set_status_text(status, 'Sent', 'green');
+                    msg_id = data.message_id;
+                    set_status_text(status, 'Submitted. Check pending...', 'blue');
                     $('#checkbox_' + guid).prop('checked', false);
+                    waiting_for_delivery.push(msg_id);
+                    msg_id_to_user_guid[msg_id] = guid;
                 }
             }
         });
     }
 
-    function scroll_back_to_user_table()
-    {
-        $('html, body').animate({
-            scrollTop: $("#userTable").offset().top
-        }, 500);
-    }
 
     function send_to_all_selected()
     {
@@ -95,7 +178,7 @@
 
         if (error) {
             alert(error);
-            scroll_back_to_user_table();
+            scroll_to_element("#userTable");
             return;
         }
 
@@ -118,9 +201,8 @@
 
         if (selected_count == 0)
             alert('Please select at least one user.');
-
-        scroll_back_to_user_table();
     }
+
 
     function refresh_table()
     {
@@ -186,8 +268,8 @@
                         <input type="checkbox" onclick="toggleAll(this)">
                     </th>
                     <th>Name</th>
-                    <th>Mobile</th>
-                    <th>HomePhone</th>
+                    <th>{{ gui_mobile_field_name }}</th>
+                    <th>{{ gui_home_phone_field_name }}</th>
                     <th>Status</th>
                 </tr>
                 </thead>

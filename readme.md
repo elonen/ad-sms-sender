@@ -1,19 +1,19 @@
-# AD to SMS sender 
+# AD to SMS sender
 
 A web based app for sending text message to Active Directory users.
 Features:
 
  * Requires a login with a valid AD account. Authorizes against given group, allowing only members to send messages.
- * Lists users who have "Telephones / Mobile" field set in their AD entry. (Optionally everyone, if LDAP_ALSO_LIST_MISSING_NUMBERS is true.)
+ * Lists users who have "mobile" and/or "homePhone" field set in their AD entry. (Optionally everyone, if LDAP_ALSO_LIST_MISSING_NUMBERS is true.)
  * Allows selecting all or some of the listed users as SMS recipients
  * Optionally users (in "viewers" AD group) can also just use it as a phone
 
 Used tech:
 
- * Python 3.7 + Flask for backend server
+ * Python 3 + Flask for backend server
  * Bootstrap and Jquery for frontend
  * LDAPS for AD queries
- * AWS SNS for sending SMS
+ * AWS SNS for sending SMS, (optionally) Cloudwatch for checking delivery status
 
 ## Screenshot
 
@@ -32,17 +32,23 @@ export LDAP_BASE="OU=Users,DC=mydomain,DC=example"
 
 export LDAP_AUTH_SENDER_GROUP='CN=ACL_SMS_Gateway,OU=ServiceACLs,OU=ACLs,DC=mydomain,DC=example'   # send SMS
 export LDAP_AUTH_VIEWER_GROUP='CN=ACL_Phonebook,OU=ServiceACLs,OU=ACLs,DC=mydomain,DC=example'  # view numbers only
-export LDAP_ALSO_LIST_MISSING_NUMBERS="false"
 
 export LDAP_AUTH_DEFAULT_DOMAIN="@mydomain.example"  # appended to username (sAMAccount)
 export LDAP_BIND_USER="CN=SMS_gateway,OU=Services,OU=Users,DC=mydomain,DC=example"
 export LDAP_BIND_PASS="<password_here>"
+
+export LDAP_ALSO_LIST_MISSING_NUMBERS="false"
+export LDAP_GUI_LABEL_MOBILE="Work phone"           # AD field 'mobile'
+export LDAP_GUI_LABEL_HOME_PHONE="Private phone"    # AD field 'homePhone'
 
 export AWS_ACCESS_KEY_ID="<access_key_here>"
 export AWS_SECRET_ACCESS_KEY="<secret_key_here>"
 export AWS_REGION="eu-north-1"
 export AWS_SMS_SENDER_ID="SenderName"
 export AWS_SMS_DEFAULT_COUNTRY_CODE="+358"  # used if number starts with 0
+
+# For checking actual delivery status (comment out to disable):
+export AWS_SMS_CLOUDWATCH_LOG_GROUP="sns/eu-north-1/123456789012/DirectPublishToPhoneNumber"
 
 #export FLASK_ENV=development  # enable debug logs
 python main.py
@@ -66,7 +72,7 @@ scalability  by its nature, so I haven't bothered.
 
 ## License
 
-Copyright 2022 Jarno Elonen <elonen@iki.fi>
+Copyright 2022-2024 Jarno Elonen <elonen@iki.fi>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
