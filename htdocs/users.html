@@ -134,7 +134,7 @@
         {
             function conditional_checkbox(user)
             {
-                if (user.mobile.length > 0)
+                if (user.mobile || user.homePhone)
                     return '<input type="checkbox" class="checkbox" value="' + user.guid + '" id="checkbox_' + user.guid + '" />';
                 return '';
             }
