@@ -38,8 +38,12 @@ export LDAP_BIND_USER="CN=SMS_gateway,OU=Services,OU=Users,DC=mydomain,DC=exampl
 export LDAP_BIND_PASS="<password_here>"
 
 export LDAP_ALSO_LIST_MISSING_NUMBERS="false"
-export LDAP_GUI_LABEL_MOBILE="Work phone"           # AD field 'mobile'
-export LDAP_GUI_LABEL_HOME_PHONE="Private phone"    # AD field 'homePhone'
+
+export LDAP_MOBILE_PHONE_FIELD="mobile"             # optional, "mobile" is default
+export LDAP_PRIVATE_PHONE_FIELD="homePhone"         # optional, "homePhone" is default
+
+export MOBILE_PHONE_GUI_LABEL="Work phone"
+export PRIVATE_PHONE_GUI_LABEL="Private phone"
 
 export AWS_ACCESS_KEY_ID="<access_key_here>"
 export AWS_SECRET_ACCESS_KEY="<secret_key_here>"

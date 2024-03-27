@@ -14,8 +14,13 @@ class LdapSettings:
     auth_viewer_group_dn: str
     default_domain: str
     also_list_missing_numbers: bool
+
+    mobile_phone_field: str = 'mobile'
     gui_label_mobile: str
-    gui_label_home_phone: str
+
+    private_phone_field: str = 'homePhone'
+    gui_label_private_phone: str
+
     log: Logger
 
 
@@ -45,8 +50,10 @@ def get_ldap_args_from_env(log) -> LdapSettings:
     conf.auth_viewer_group_dn = env('LDAP_AUTH_VIEWER_GROUP')
     conf.default_domain = env('LDAP_AUTH_DEFAULT_DOMAIN')
     conf.also_list_missing_numbers = (env('LDAP_ALSO_LIST_MISSING_NUMBERS', 'true') .strip().lower() == 'true')
-    conf.gui_label_mobile = env('LDAP_GUI_LABEL_MOBILE', 'Mobile')
-    conf.gui_label_home_phone = env('LDAP_GUI_LABEL_HOME_PHONE', 'HomePhone')
+    conf.mobile_phone_field = env('LDAP_MOBILE_PHONE_FIELD', 'mobile')
+    conf.private_phone_field = env('LDAP_PRIVATE_PHONE_FIELD', 'homePhone')
+    conf.gui_label_mobile = env('MOBILE_PHONE_GUI_LABEL', 'Mobile')
+    conf.gui_label_private_phone = env('PRIVATE_PHONE_GUI_LABEL', 'HomePhone')
     conf.log = log
 
     if missing_envs:
@@ -97,12 +104,19 @@ def list_users_with_phone_num(ldap_args: LdapSettings) -> List[Dict]:
     l.protocol_version = ldap.VERSION3
     l.simple_bind_s(ldap_args.bind_user, ldap_args.bind_password)
 
+    ldap_args.log.debug('LDAP connected to: ' + ldap_args.server)
+
     # Search for users with a mobile phone number
     ldap_filter = '(&(objectClass=person)(mobile=*))'
     if ldap_args.also_list_missing_numbers:
         ldap_filter = '(objectClass=person)'
 
-    attrs = ['cn', 'mobile', 'homePhone', 'sAMAccountName', 'sn', 'objectGUID']
+    attrs = ['cn', 'sAMAccountName', 'sn', 'objectGUID']
+    if ldap_args.mobile_phone_field:
+        attrs.append(ldap_args.mobile_phone_field)
+    if ldap_args.private_phone_field:
+        attrs.append(ldap_args.private_phone_field)
+
     ldap_args.log.debug('LDAP searching mobile phone users: ' + ldap_filter)
     ldap_result_id = l.search(ldap_args.base, ldap.SCOPE_SUBTREE, ldap_filter, attrs)
     result_set = []
@@ -120,8 +134,8 @@ def list_users_with_phone_num(ldap_args: LdapSettings) -> List[Dict]:
     # Format result
     return [{
         'user': x[0][1]['sAMAccountName'][0].decode('utf-8'),
-        'mobile': (x[0][1]['mobile'][0].decode('utf-8') if 'mobile' in x[0][1] else ''),
-        'homePhone': (x[0][1]['homePhone'][0].decode('utf-8') if 'homePhone' in x[0][1] else ''),
+        'mobile': (x[0][1][ldap_args.mobile_phone_field][0].decode('utf-8') if ldap_args.mobile_phone_field in x[0][1] else ''),
+        'private': (x[0][1][ldap_args.private_phone_field][0].decode('utf-8') if ldap_args.private_phone_field in x[0][1] else ''),
         'guid': x[0][1]['objectGUID'][0].hex()
     } for x in result_set]
 
@@ -153,6 +167,8 @@ def ldap_test_user_group_membership(ldap_args: LdapSettings, user_account: str, 
     l.protocol_version = ldap.VERSION3
     l.simple_bind_s(ldap_args.bind_user, ldap_args.bind_password)
 
+    ldap_args.log.debug('LDAP connected to: ' + ldap_args.server)
+
     # Remove domain from user account if present (not present in sAMAccountName)
     if '@' in user_account:
         user_account = user_account.split('@')[0]
@@ -164,10 +180,13 @@ def ldap_test_user_group_membership(ldap_args: LdapSettings, user_account: str, 
     attrs = ['sAMAccountName']
     ldap_result_id = l.search(ldap_args.base, ldap.SCOPE_SUBTREE, ldap_filter, attrs)
     result_type, result_data = l.result(ldap_result_id, 0)
-    ldap_args.log.debug('LDAP auth group test results (empty=auth failed): ' + str(result_data))
+    ldap_args.log.debug('LDAP auth group test results (empty if auth failed): ' + str(result_data))
 
     if not result_data or result_type != ldap.RES_SEARCH_ENTRY:
+        ldap_args.log.debug('LDAP auth group test failed')
+        l.unbind_s()
         return False
 
+    ldap_args.log.debug('LDAP auth group test passed')
     l.unbind_s()
     return True

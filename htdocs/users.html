@@ -12,7 +12,7 @@
                <h1>Phonebook</h1>
             {% endif %}
 
-            <em>This lists 'Mobile' and 'homePhone' fields in Active Directory entries, under 'Telephones'</em>
+            <em>This lists '{{ gui_mobile_field_name }}' / '{{ gui_private_phone_field_name }}' fields in Active Directory entries.</em>
         </div>
     </div>
 
@@ -185,8 +185,8 @@
        phone_fields = [];
          if ($('#pfMobile').prop('checked') || $('#pfBoth').prop('checked'))
                 phone_fields.push('mobile');
-        if ($('#pfHomePhone').prop('checked') || $('#pfBoth').prop('checked'))
-            phone_fields.push('homePhone');
+        if ($('#pfPrivate').prop('checked') || $('#pfBoth').prop('checked'))
+            phone_fields.push('private');
 
         // Get the selected users and send SMS
         var selected_count = 0;
@@ -216,7 +216,7 @@
         {
             function conditional_checkbox(user)
             {
-                if (user.mobile || user.homePhone)
+                if (user.mobile || user.private)
                     return '<input type="checkbox" class="checkbox" value="' + user.guid + '" id="checkbox_' + user.guid + '" />';
                 return '';
             }
@@ -238,7 +238,7 @@
                                 '<td>' + conditional_checkbox(user) + '</td>' +
                                 '<td>' + user.user + '</td>' +
                                 '<td>' + user.mobile + '</td>' +
-                                '<td>' + user.homePhone + '</td>' +
+                                '<td>' + user.private + '</td>' +
                                 '<td id="status_' + user.guid + '"> - </td>' +
                                 '</tr>'
                             );
@@ -269,7 +269,7 @@
                     </th>
                     <th>Name</th>
                     <th>{{ gui_mobile_field_name }}</th>
-                    <th>{{ gui_home_phone_field_name }}</th>
+                    <th>{{ gui_private_phone_field_name }}</th>
                     <th>Status</th>
                 </tr>
                 </thead>
@@ -298,8 +298,8 @@
                                         <label class="form-check-label" for="mobile">{{ gui_mobile_field_name }}</label>
                                     </div>
                                     <div class="form-check form-check-inline">
-                                        <input class="form-check-input" type="radio" id="pfHomePhone" name="phone" value="homePhone">
-                                        <label class="form-check-label" for="homePhone">{{ gui_home_phone_field_name }}</label>
+                                        <input class="form-check-input" type="radio" id="pfPrivate" name="phone" value="private">
+                                        <label class="form-check-label" for="private">{{ gui_private_phone_field_name }}</label>
                                     </div>
                                     <div class="form-check form-check-inline">
                                         <input class="form-check-input" type="radio" id="pfBoth" name="phone" value="both" checked>

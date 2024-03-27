@@ -1,3 +1,4 @@
+import logging
 import re, sys
 from flask import jsonify, request
 from flask_httpauth import HTTPBasicAuth
@@ -23,6 +24,9 @@ def main():
     template_dir = os.path.abspath('htdocs')
     app = Flask(__name__, template_folder=template_dir)
     auth = HTTPBasicAuth()
+
+    # Enable debug logging level
+    #app.logger.setLevel(logging.DEBUG)
 
     aws_conf, ldap_args = None, None
     try:
@@ -68,11 +72,13 @@ def main():
     @app.route('/users')
     @auth.login_required(role=['sender', 'viewer'])
     def users():
+        user_roles = get_user_roles(auth.current_user())
+        ldap_args.log.info(f"User {auth.current_user()} roles: {user_roles}")
         return render_template(
             'users.html',
-            sms_enabled=('sender' in get_user_roles(auth.current_user())),
+            sms_enabled=('sender' in user_roles),
             gui_mobile_field_name=ldap_args.gui_label_mobile,
-            gui_home_phone_field_name=ldap_args.gui_label_home_phone
+            gui_private_phone_field_name=ldap_args.gui_label_private_phone
         )
 
     @app.route('/users_json')
@@ -100,7 +106,7 @@ def main():
             data['message'] = data['message'][:160]
 
             for p in data['phone_fields']:
-                assert p in ['mobile', 'homePhone'], 'Invalid phone field'
+                assert p in ['mobile', 'private'], 'Invalid phone field'
 
             # Fetch user's mobile phone from LDAP based on objectGUID
             msg_id = None
